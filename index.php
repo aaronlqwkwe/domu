@@ -1,10 +1,20 @@
 <?php
 session_start();
+require_once 'conexion.php'; // Asegúrate de que este archivo esté en la misma carpeta
 
-// Verificamos si hay una sesión activa
+// 1. Verificamos si hay una sesión activa
 $logeado = isset($_SESSION['usuario_id']);
 $nombre_usuario = $logeado ? $_SESSION['nombre'] : '';
 $rol_usuario = $logeado ? $_SESSION['rol_id'] : null;
+
+// 2. Consultar las propiedades reales de la base de datos
+try {
+    $stmt = $conn->prepare("SELECT * FROM propiedad ORDER BY id DESC");
+    $stmt->execute();
+    $propiedades = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch(PDOException $e) {
+    $propiedades = []; // En caso de error, lista vacía para no romper la página
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -14,16 +24,14 @@ $rol_usuario = $logeado ? $_SESSION['rol_id'] : null;
     <title>InmoPro - Encuentra tu hogar ideal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Aseguramos que el body sea totalmente sólido para que no se vea el escritorio atrás */
         body { background-color: #f3f4f6; } 
-        
         .hero-bg {
             background-image: linear-gradient(rgba(17, 24, 39, 0.75), rgba(17, 24, 39, 0.75)), url('https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80');
             background-size: cover;
             background-position: center;
         }
         .property-card { transition: transform 0.2s, box-shadow 0.2s; background-color: white; }
-        .property-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+        .property-card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
     </style>
 </head>
 <body class="font-sans text-gray-800 flex flex-col min-h-screen">
@@ -39,9 +47,7 @@ $rol_usuario = $logeado ? $_SESSION['rol_id'] : null;
                 <span class="text-sm font-medium text-gray-300 hidden md:block">Hola, <?php echo htmlspecialchars($nombre_usuario); ?></span>
                 
                 <?php if($rol_usuario == 1): ?>
-                    <a href="/inmopro/vistas/admin_dashboard.php" class="bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition">Panel Admin</a>
-                <?php elseif($rol_usuario == 2): ?>
-                    <a href="agent_dashboard.php" class="bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition">Panel Agente</a>
+                    <a href="vistas/admin_dashboard.php" class="bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition">Panel Admin</a>
                 <?php endif; ?>
 
                 <a href="apis/api_logout.php" class="bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 px-4 rounded-lg transition">Salir</a>
@@ -67,71 +73,60 @@ $rol_usuario = $logeado ? $_SESSION['rol_id'] : null;
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             
-            <a href="<?php echo $logeado ? '#' : 'vistas/login.php'; ?>" class="property-card rounded-2xl overflow-hidden border border-gray-200 block shadow-sm">
-                <div class="relative h-64 bg-gray-200">
-                    <img src="https://images.unsplash.com/photo-1613490493576-7fde63acd811?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="w-full h-full object-cover" alt="Casa en Polanco">
-                    <div class="absolute top-4 left-4 bg-white px-3 py-1 rounded-full text-xs font-bold text-gray-900 shadow">En Venta</div>
-                    <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 to-transparent p-4">
-                        <div class="text-white font-bold text-2xl">$4,500,000 MXN</div>
+            <?php if (count($propiedades) > 0): ?>
+                <?php foreach($propiedades as $p): ?>
+                
+                <div class="property-card rounded-2xl overflow-hidden border border-gray-200 block shadow-sm flex flex-col">
+                    <div class="relative h-64 bg-gray-200">
+                        <?php 
+                            // Buscamos la foto en la carpeta uploads, si no hay, ponemos una por defecto
+                            $foto_url = (!empty($p['imagen'])) ? 'uploads/' . $p['imagen'] : 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80';
+                        ?>
+                        <img src="<?php echo $foto_url; ?>" class="w-full h-full object-cover" alt="<?php echo htmlspecialchars($p['titulo']); ?>">
+                        
+                        <div class="absolute top-4 left-4 bg-white px-3 py-1 rounded-full text-xs font-bold text-gray-900 shadow capitalize">
+                            <?php echo htmlspecialchars($p['estado']); ?>
+                        </div>
+                        
+                        <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 to-transparent p-4">
+                            <div class="text-white font-bold text-2xl">$<?php echo number_format($p['precio'], 2); ?> <span class="text-xs font-normal">MXN</span></div>
+                        </div>
                     </div>
-                </div>
-                <div class="p-6">
-                    <h3 class="text-xl font-bold text-gray-900 mb-2 truncate">Residencia de Lujo en Polanco</h3>
-                    <p class="text-gray-500 text-sm mb-4 flex items-center gap-1">
-                        <svg class="w-4 h-4 text-[#6366f1]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path></svg>
-                        Miguel Hidalgo, CDMX
-                    </p>
-                    <div class="flex justify-between items-center border-t border-gray-100 pt-4 text-sm text-gray-600">
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">4</span> Habs</div>
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">3</span> Baños</div>
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">350</span> m²</div>
-                    </div>
-                </div>
-            </a>
+                    
+                    <div class="p-6 flex flex-col flex-grow">
+                        <h3 class="text-xl font-bold text-gray-900 mb-2 truncate"><?php echo htmlspecialchars($p['titulo']); ?></h3>
+                        
+                        <p class="text-gray-500 text-sm mb-4 line-clamp-2">
+                            <?php echo htmlspecialchars($p['descripcion']); ?>
+                        </p>
 
-            <a href="<?php echo $logeado ? '#' : 'vistas/login.php'; ?>" class="property-card rounded-2xl overflow-hidden border border-gray-200 block shadow-sm">
-                <div class="relative h-64 bg-gray-200">
-                    <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="w-full h-full object-cover" alt="Casa en Zapopan">
-                    <div class="absolute top-4 left-4 bg-[#6366f1] text-white px-3 py-1 rounded-full text-xs font-bold shadow">En Renta</div>
-                    <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 to-transparent p-4">
-                        <div class="text-white font-bold text-2xl">$25,000 MXN / mes</div>
+                        <div class="mt-auto">
+                            <div class="flex justify-between items-center border-t border-gray-100 pt-4 text-sm text-gray-600">
+                                <div class="flex items-center gap-1 font-semibold text-gray-900">
+                                    📐 <?php echo $p['area_m2']; ?> m²
+                                </div>
+                                
+                                <?php if($p['latitud'] && $p['longitud']): ?>
+                                <a href="https://www.google.com/maps?q=<?php echo $p['latitud']; ?>,<?php echo $p['longitud']; ?>" target="_blank" class="text-[#6366f1] hover:underline flex items-center gap-1">
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path></svg>
+                                    Ver Mapa
+                                </a>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <a href="detalles.php?id=<?php echo $p['id']; ?>" class="block w-full text-center mt-4 bg-gray-900 text-white py-2 rounded-lg font-bold hover:bg-gray-800 transition">
+                                Ver Detalles
+                            </a>
+                        </div>
                     </div>
                 </div>
-                <div class="p-6">
-                    <h3 class="text-xl font-bold text-gray-900 mb-2 truncate">Casa Moderna Minimalista</h3>
-                    <p class="text-gray-500 text-sm mb-4 flex items-center gap-1">
-                        <svg class="w-4 h-4 text-[#6366f1]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path></svg>
-                        Zapopan, Jalisco
-                    </p>
-                    <div class="flex justify-between items-center border-t border-gray-100 pt-4 text-sm text-gray-600">
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">3</span> Habs</div>
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">2.5</span> Baños</div>
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">200</span> m²</div>
-                    </div>
-                </div>
-            </a>
 
-            <a href="<?php echo $logeado ? '#' : 'vistas/login.php'; ?>" class="property-card rounded-2xl overflow-hidden border border-gray-200 block shadow-sm">
-                <div class="relative h-64 bg-gray-200">
-                    <img src="https://images.unsplash.com/photo-1512917774080-9991f1c4c750?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="w-full h-full object-cover" alt="Depa en Monterrey">
-                    <div class="absolute top-4 left-4 bg-white px-3 py-1 rounded-full text-xs font-bold text-gray-900 shadow">En Venta</div>
-                    <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 to-transparent p-4">
-                        <div class="text-white font-bold text-2xl">$3,200,000 MXN</div>
-                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="col-span-full text-center py-20">
+                    <p class="text-gray-400 text-xl">No hay propiedades publicadas todavía.</p>
                 </div>
-                <div class="p-6">
-                    <h3 class="text-xl font-bold text-gray-900 mb-2 truncate">Departamento Loft c/ Vista</h3>
-                    <p class="text-gray-500 text-sm mb-4 flex items-center gap-1">
-                        <svg class="w-4 h-4 text-[#6366f1]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path></svg>
-                        Monterrey, Nuevo León
-                    </p>
-                    <div class="flex justify-between items-center border-t border-gray-100 pt-4 text-sm text-gray-600">
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">2</span> Habs</div>
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">2</span> Baños</div>
-                        <div class="flex items-center gap-1"><span class="font-bold text-gray-900">120</span> m²</div>
-                    </div>
-                </div>
-            </a>
+            <?php endif; ?>
 
         </div>
     </main>

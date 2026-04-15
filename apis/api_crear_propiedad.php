@@ -1,54 +1,74 @@
 <?php
-// Activamos reporte de errores para ver qué pasa exactamente
-ini_set('display_errors', 1);
+// Activar errores para ver qué está fallando
 error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 session_start();
 require_once '../conexion.php';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    
-    // Recolectamos los datos del formulario
     $titulo      = $_POST['titulo'] ?? '';
     $descripcion = $_POST['descripcion'] ?? '';
     $precio      = $_POST['precio'] ?? 0;
-    $estado      = $_POST['estado'] ?? 'Disponible';
     $area_m2     = $_POST['area_m2'] ?? 0;
-    $latitud     = $_POST['latitud'] ?? null;
-    $longitud    = $_POST['longitud'] ?? null;
-    $agente_id   = $_SESSION['usuario_id']; // El ID del admin logeado
+    $latitud     = !empty($_POST['latitud']) ? $_POST['latitud'] : null;
+    $longitud    = !empty($_POST['longitud']) ? $_POST['longitud'] : null;
+    
+    // Si no hay agente en sesión, ponemos 1 por defecto para que no falle
+    $agente_id   = isset($_SESSION['usuario_id']) ? $_SESSION['usuario_id'] : 1; 
+    
+    $nombre_imagen = "default.jpg"; 
 
+    // --- LÓGICA DE LA IMAGEN ---
+    if (isset($_FILES['foto'])) {
+        $error_php = $_FILES['foto']['error'];
+        
+        if ($error_php === UPLOAD_ERR_OK) {
+            $ruta_carpeta = "../uploads/";
+            
+            // Si la carpeta no existe, intentamos crearla
+            if (!file_exists($ruta_carpeta)) {
+                mkdir($ruta_carpeta, 0777, true);
+            }
+
+            $extension = strtolower(pathinfo($_FILES['foto']['name'], PATHINFO_EXTENSION));
+            $nombre_imagen = time() . "_" . uniqid() . "." . $extension;
+            $ruta_destino = $ruta_carpeta . $nombre_imagen;
+            
+            // Intentar mover el archivo
+            if (!move_uploaded_file($_FILES['foto']['tmp_name'], $ruta_destino)) {
+                die("❌ ERROR: La imagen se recibió, pero PHP no tiene permisos para guardarla en la carpeta 'uploads'.");
+            }
+        } elseif ($error_php === UPLOAD_ERR_INI_SIZE || $error_php === UPLOAD_ERR_FORM_SIZE) {
+            die("❌ ERROR: La imagen es demasiado pesada. El límite de tu servidor suele ser 2MB.");
+        } elseif ($error_php !== UPLOAD_ERR_NO_FILE) {
+            die("❌ ERROR DESCONOCIDO al subir la imagen. Código de error PHP: " . $error_php);
+        }
+    }
+
+    // --- GUARDAR EN BASE DE DATOS ---
     try {
-        // SQL basado exactamente en tu captura de phpMyAdmin
-        // OJO: Verifica si 'area_m2' en tu DB tiene guion bajo o es 'area m2'
-        $sql = "INSERT INTO propiedad (titulo, descripcion, precio, estado, area_m2, latitud, longitud, agente_id) 
-                VALUES (:tit, :des, :pre, :est, :area, :lat, :lon, :age)";
+        $sql = "INSERT INTO propiedad (titulo, descripcion, precio, estado, area_m2, latitud, longitud, agente_id, imagen) 
+                VALUES (:tit, :des, :pre, 'Disponible', :area, :lat, :lon, :age, :img)";
         
         $stmt = $conn->prepare($sql);
-        
         $stmt->execute([
             ':tit'  => $titulo,
             ':des'  => $descripcion,
             ':pre'  => $precio,
-            ':est'  => $estado,
             ':area' => $area_m2,
             ':lat'  => $latitud,
             ':lon'  => $longitud,
-            ':age'  => $agente_id
+            ':age'  => $agente_id,
+            ':img'  => $nombre_imagen
         ]);
 
-        // Si llega aquí, es que funcionó
         header("Location: ../vistas/admin_dashboard.php?mensaje=propiedad_guardada");
         exit;
-
     } catch(PDOException $e) {
-        // En lugar de pantalla blanca, esto te dirá el error
-        echo "<h3>Error al guardar en la base de datos:</h3>";
-        echo "<p>" . $e->getMessage() . "</p>";
-        echo "<a href='../vistas/admin_dashboard.php'>Volver al panel</a>";
-        exit;
+        die("❌ ERROR EN BASE DE DATOS: " . $e->getMessage());
     }
 } else {
-    header("Location: ../vistas/admin_dashboard.php");
-    exit;
+    die("❌ No se recibieron datos por POST.");
 }
+?>

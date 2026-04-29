@@ -8,7 +8,7 @@ $nombre_admin = $_SESSION['nombre'];
 require_once '../conexion.php'; 
 
 // 1. Consulta de Usuarios
-$stmt = $conn->prepare("SELECT id, nombre, email, rol_id FROM usuarios ORDER BY id DESC");
+$stmt = $conn->prepare("SELECT id, nombre, email, rol_id, estado_cuenta FROM usuarios ORDER BY id DESC");
 $stmt->execute();
 $lista_usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $total_usuarios = count($lista_usuarios);
@@ -44,12 +44,22 @@ $total_propiedades = count($lista_propiedades);
                 Inmo<span class="text-[#6366f1]">Admin</span>
             </h1>
         </div>
+        
         <nav class="flex-1 p-4 space-y-2">
-            <a href="admin_dashboard.php" class="flex items-center gap-3 bg-[#6366f1] text-white px-4 py-3 rounded-xl transition">Dashboard</a>
+            <a href="admin_dashboard.php" class="flex items-center gap-3 bg-[#6366f1] text-white px-4 py-3 rounded-xl transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                Dashboard
+            </a>
+            
             <button onclick="abrirModalPropiedad()" class="flex items-center gap-3 hover:bg-gray-800 hover:text-white px-4 py-3 rounded-xl transition w-full text-left">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 Nueva Propiedad
             </button>
+
+            <a href="admin_usuarios_pendientes.php" class="flex items-center gap-3 hover:bg-gray-800 hover:text-white px-4 py-3 rounded-xl transition">
+                <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Usuarios por Aceptar
+            </a>
         </nav>
         <div class="p-4 border-t border-gray-800">
             <a href="../apis/api_logout.php" class="flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition text-sm font-semibold w-full">Cerrar Sesión</a>
@@ -83,7 +93,7 @@ $total_propiedades = count($lista_propiedades);
                     <div class="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center text-[#6366f1]"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg></div>
                 </div>
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex items-center justify-between">
-                    <div><p class="text-sm font-medium text-gray-500 mb-1">Usuarios</p><p class="text-3xl font-bold text-gray-900"><?php echo $total_usuarios; ?></p></div>
+                    <div><p class="text-sm font-medium text-gray-500 mb-1">Usuarios Totales</p><p class="text-3xl font-bold text-gray-900"><?php echo $total_usuarios; ?></p></div>
                     <div class="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center text-green-500"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg></div>
                 </div>
             </div>
@@ -135,7 +145,7 @@ $total_propiedades = count($lista_propiedades);
 
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="p-6 border-b border-gray-100">
-                    <h3 class="text-lg font-bold text-gray-800">Usuarios Registrados</h3>
+                    <h3 class="text-lg font-bold text-gray-800">Gestión General de Usuarios</h3>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
@@ -143,6 +153,7 @@ $total_propiedades = count($lista_propiedades);
                             <tr class="bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-100">
                                 <th class="p-4 font-bold">Nombre</th>
                                 <th class="p-4 font-bold">Email</th>
+                                <th class="p-4 font-bold text-center">Estado de Cuenta</th>
                                 <th class="p-4 font-bold text-center">Acciones</th>
                             </tr>
                         </thead>
@@ -152,8 +163,32 @@ $total_propiedades = count($lista_propiedades);
                                 <td class="p-4 font-medium text-gray-900"><?php echo htmlspecialchars($user['nombre']); ?></td>
                                 <td class="p-4 text-gray-600"><?php echo htmlspecialchars($user['email']); ?></td>
                                 <td class="p-4 text-center">
-                                    <button class="text-indigo-600 font-bold mr-3">Editar</button>
-                                    <a href="../apis/api_eliminar_usuario.php?id=<?php echo $user['id']; ?>" onclick="return confirm('¿Estás seguro de que deseas eliminar este usuario definitivamente?')" class="text-red-500 hover:text-red-700 font-bold">Borrar</a>
+                                    <?php 
+                                        $color_estado = 'bg-gray-100 text-gray-600';
+                                        if(isset($user['estado_cuenta'])) {
+                                            if($user['estado_cuenta'] == 'aprobado') $color_estado = 'bg-green-100 text-green-700';
+                                            if($user['estado_cuenta'] == 'pendiente') $color_estado = 'bg-yellow-100 text-yellow-700';
+                                            if($user['estado_cuenta'] == 'baneado') $color_estado = 'bg-red-100 text-red-700';
+                                        }
+                                    ?>
+                                    <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase <?php echo $color_estado; ?>">
+                                        <?php echo isset($user['estado_cuenta']) ? htmlspecialchars($user['estado_cuenta']) : 'N/A'; ?>
+                                    </span>
+                                </td>
+                                <td class="p-4 text-center">
+                                    <?php if(isset($user['estado_cuenta']) && $user['estado_cuenta'] != 'baneado'): ?>
+                                        <a href="../apis/api_estado_usuario.php?id=<?php echo $user['id']; ?>&estado=baneado" 
+                                           onclick="return confirm('¿Estás seguro de Banear a este usuario? Ya no podrá iniciar sesión.')" 
+                                           class="text-orange-500 hover:text-orange-700 font-bold mr-3">Banear</a>
+                                    <?php endif; ?>
+                                    
+                                    <?php if(isset($user['estado_cuenta']) && $user['estado_cuenta'] == 'baneado'): ?>
+                                        <a href="../apis/api_estado_usuario.php?id=<?php echo $user['id']; ?>&estado=aprobado" 
+                                           onclick="return confirm('¿Quitar baneo?')" 
+                                           class="text-green-600 hover:text-green-700 font-bold mr-3">Desbanear</a>
+                                    <?php endif; ?>
+
+                                    <a href="../apis/api_eliminar_usuario.php?id=<?php echo $user['id']; ?>" onclick="return confirm('¿Eliminar definitivamente a este usuario de la base de datos? Esta acción no se puede deshacer.')" class="text-red-500 hover:text-red-700 font-bold">Borrar</a>
                                 </td>
                             </tr>
                             <?php endforeach; ?>

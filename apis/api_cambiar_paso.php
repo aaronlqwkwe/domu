@@ -1,50 +1,59 @@
 <?php
 session_start();
-require_once '../conexion.php';
 
-// 1. Validar que vengan los datos necesarios por POST
-if (!isset($_POST['apartado_id']) || !isset($_POST['nuevo_paso']) || !isset($_POST['propiedad_id'])) {
-    header("Location: ../vistas/admin_dashboard.php?error=datos_incompletos");
+// 1. Reporte de errores por si necesitas debuguear en la terminal
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// 2. Validar que el usuario esté logeado
+if (!isset($_SESSION['usuario_id'])) {
+    header("Location: ../vistas/login.php");
     exit;
 }
 
+// 3. CORREGIDO: Ajustamos la validación para que busque 'nuevo_paso' tal como lo envía tu formulario
+if (!isset($_POST['apartado_id']) || !isset($_POST['nuevo_paso'])) {
+    header("Location: ../vistas/admin_dashboard.php?mensaje=datos_incompletos");
+    exit;
+}
+
+require_once '../conexion.php'; 
+
 $apartado_id = intval($_POST['apartado_id']);
-$nuevo_paso = intval($_POST['nuevo_paso']);
-$propiedad_id = intval($_POST['propiedad_id']);
+$nuevo_paso = intval($_POST['nuevo_paso']); // 🌟 Recibe correctamente el select de tu formulario
 
 try {
     $conn->beginTransaction();
 
-    // 2. Actualizar el paso legal en la tabla 'const_apartados'
-    $stmt = $conn->prepare("UPDATE const_apartados SET paso_legal = :nuevo_paso WHERE id = :apartado_id");
-    $stmt->execute([
-        ':nuevo_paso' => $nuevo_paso,
-        ':apartado_id' => $apartado_id
+    // 1. Actualizar el paso legal del proceso de apartado
+    $stmt1 = $conn->prepare("UPDATE const_apartados SET paso_legal = :paso WHERE id = :id");
+    $stmt1->execute([
+        ':paso' => $nuevo_paso, 
+        ':id' => $apartado_id
     ]);
 
-    // 3. 🌟 LÓGICA DE RECHAZO (Paso 0): Si se rechaza, la casa vuelve a estar 'disponible'
+    // 2. 🌟 AUTOMATIZACIÓN: Si el paso seleccionado es 0 (Cancelar Operación), liberar la propiedad
     if ($nuevo_paso === 0) {
-        $stmtProp = $conn->prepare("UPDATE propiedad SET estado = 'disponible' WHERE id = :propiedad_id");
-        $stmtProp->execute([':propiedad_id' => $propiedad_id]);
-    } 
-    // 🌟 LÓGICA DE ENTREGA (Paso 4): Si ya se entregó, puedes pasarla a 'vendida' si manejas ese estado
-    elseif ($nuevo_paso === 4) {
-        $stmtProp = $conn->prepare("UPDATE propiedad SET estado = 'vendida' WHERE id = :propiedad_id");
-        $stmtProp->execute([':propiedad_id' => $propiedad_id]);
-    }
-    // Si se mueve a pasos 1, 2 o 3, se asegura de que se mantenga 'apartada'
-    else {
-        $stmtProp = $conn->prepare("UPDATE propiedad SET estado = 'apartada' WHERE id = :propiedad_id");
-        $stmtProp->execute([':propiedad_id' => $propiedad_id]);
+        
+        // Usamos la propiedad_id que mandas de manera directa en el formulario oculto de tu tabla
+        if (isset($_POST['propiedad_id']) && !empty($_POST['propiedad_id'])) {
+            $propiedad_id = intval($_POST['propiedad_id']);
+            
+            $stmt2 = $conn->prepare("UPDATE propiedad SET estado = 'disponible' WHERE id = :propiedad_id");
+            $stmt2->execute([':propiedad_id' => $propiedad_id]);
+        }
     }
 
     $conn->commit();
+    
+    // 3. Redirección sincronizada con las alertas que ya tienes programadas en tu HTML
     header("Location: ../vistas/admin_dashboard.php?mensaje=actualizado_correcto");
     exit;
 
 } catch (PDOException $e) {
-    if (isset($conn) && $conn->inTransaction()) {
-        $conn->rollBack();
+    if ($conn->inTransaction()) { 
+        $conn->rollBack(); 
     }
-    die("Error al actualizar el estado: " . $e->getMessage());
+    die("Error crítico al actualizar el trámite legal: " . $e->getMessage());
 }
